@@ -1,32 +1,38 @@
-#include<FlatIndex.h>
+#include <FlatIndex.h>
 
 #include <iostream>
+#include <cstring>
 
-FlatIndex::FlatIndex(int32_t _d, int32_t _max_attr_num) : d(_d),max_attr_num(_max_attr_num),n(0) {
-    total_d = d + max_attr_num * 2;
+FlatIndex::FlatIndex(int32_t _d, int32_t _max_attr_num) : embedding_d(_d), max_attr_num(_max_attr_num), n(0)
+{
+    total_d = embedding_d + max_attr_num * 2; // 属性是 64 位的，相当于 2 个 32 位
 }
 
-bool FlatIndex::build(std::vector<std::vector<float>> embeddings, std::vector<std::vector<AttrNo>> attributes){
-    if (embeddings.size()!=attributes.size()){
+bool FlatIndex::build(std::vector<std::vector<float>> embeddings, std::vector<std::vector<AttrNo>> attributes)
+{
+    if (embeddings.size() != attributes.size())
+    {
         std::cerr << "FlatIndex::build: embeddings size != attributes size" << std::endl;
         return false;
     }
     raw_data.resize(embeddings.size());
     for (int i = 0; i < embeddings.size(); i++)
     {
-        if(embeddings[i].size()!=d){
+        if (embeddings[i].size() != embedding_d)
+        {
             raw_data.clear();
-            std::cerr << "FlatIndex::build: " << i << "th embedding'd is "<<embeddings[i].size() << " != " << d << std::endl;
+            std::cerr << "FlatIndex::build: " << i << "-th embedding'd is " << embeddings[i].size() << " != " << embedding_d << std::endl;
             return false;
         }
         raw_data[i].resize(total_d);
-        memcpy(raw_data[i].data(), embeddings[i].data(), sizeof(float)*d);
-        if (attributes[i].size()>max_attr_num){
+        std::memcpy(raw_data[i].data(), embeddings[i].data(), sizeof(float) * embedding_d);
+        if (attributes[i].size() > max_attr_num)
+        {
             std::cerr << "FlatIndex::build: " << i << "th attribute size is " << attributes[i].size() << " > " << max_attr_num << std::endl;
             return false;
         }
-        memcpy((char *)(raw_data[i].data() + d), attributes[i].data(), sizeof(AttrNo) * attributes[i].size());
-        memset((char *)(raw_data[i].data() + d + attributes[i].size() * 2), 0, sizeof(AttrNo) * (max_attr_num - attributes[i].size()));
+        std::memcpy((char *)(raw_data[i].data() + embedding_d), attributes[i].data(), sizeof(AttrNo) * attributes[i].size());
+        std::memset((char *)(raw_data[i].data() + embedding_d + attributes[i].size() * 2), 0LL, sizeof(AttrNo) * (max_attr_num - attributes[i].size()));
     }
     n = embeddings.size();
     return true;
@@ -34,54 +40,58 @@ bool FlatIndex::build(std::vector<std::vector<float>> embeddings, std::vector<st
 
 bool FlatIndex::insert_attribute(VecId vid, AttrNo ano)
 {
-    if (vid >raw_data.size() || vid<0){
+    if (vid > raw_data.size() || vid < 0)
+    {
         std::cerr << "FlatIndex::insert_attribute: invalid vid " << vid << std::endl;
         return false;
     }
-    if (ano<=0){
+    if (ano <= 0)
+    {
         std::cerr << "FlatIndex::insert_attribute: invalid ano " << ano << std::endl;
         return false;
     }
-    int attr_num = 0, s = d;
-    while(attr_num<max_attr_num){
+    int attr_num = 0, s = embedding_d;
+    while (attr_num < max_attr_num)
+    {
         AttrNo attr_no = *(AttrNo *)&raw_data[vid][s];
-        if (attr_no==0){
+        if (attr_no == 0)
+        {
             break;
-        }else if (attr_no == ano){
+        }
+        else if (attr_no == ano)
+        {
             std::cerr << "FlatIndex::insert_attribute: exist attr_no " << attr_no << " at position " << attr_num << std::endl;
             return false;
         }
         attr_num++;
     }
-    if (attr_num==max_attr_num){
+    if (attr_num == max_attr_num)
+    {
 
         return false;
     }
-    return true;
 }
-bool FlatIndex::insert_attributes(VecId vid, std::vector<AttrNo> ano)
+void FlatIndex::insert_attributes(VecId vid, std::vector<AttrNo> ano)
 {
-    for (auto &a : ano)
-        attr_bitset[a][vid] = 1;
-    return true;
+    // for (auto &a : ano)
+    //     attr_bitset[a][vid] = 1;
+    // return true;
 }
 
-bool FlatIndex::delete_attribute(VecId vid, AttrNo ano)
+void FlatIndex::delete_attribute(VecId vid, AttrNo ano)
 {
     if (attr_bitset.find(ano) == attr_bitset.end())
         return;
     attr_bitset[ano][vid] = 0;
-    return true;
 }
 
-bool FlatIndex::delete_attributes(VecId vid, std::vector<AttrNo> ano)
+void FlatIndex::delete_attributes(VecId vid, std::vector<AttrNo> ano)
 {
     for (auto &a : ano)
     {
         if (attr_bitset.find(a) != attr_bitset.end())
             attr_bitset[a][vid] = 0;
     }
-    return true;
 }
 
 std::vector<VecId> FlatIndex::get_ids(AttrNo ano)
